@@ -445,6 +445,8 @@ After approval, fire the video action using `image_url` = the value from `last_g
 - `last_generated_image_url` arrives in the callback message after image generation completes (not immediately — wait for it before showing approval)
 - If user wants to change the scene: generate a new image, repeat the approval step
 - If user says "use my reference image" — then and only then use `ref_image_face` from companion state
+- **If the user says "generate the video", "make the video", "proceed", "go ahead", or any equivalent while you are mid-workflow but have NOT yet received `last_generated_image_url`:** do NOT generate a new image. Respond with: "The scene image is still processing — I'll show it to you in a moment and we can approve it before making the video." Then wait for the callback.
+- **If the user says "generate the video" and `last_generated_image_url` IS present in this message or a recent message:** use that URL directly as `image_url` in the video action. Do NOT generate another image.
 
 ## MEDIA GENERATION INTELLIGENCE
 
@@ -456,7 +458,7 @@ After approval, fire the video action using `image_url` = the value from `last_g
 - `video_model`: "premium/best"→veo-3.1, else→kling
 - `ai_enhancement`: Only true if "enhance/improve/boost" mentioned
 - `generate_audio`: Only true if "with sound/audio" mentioned
-- `image_url` (videos): Use companion's default reference image; omit for generic motion requests
+- `image_url` (videos): **If `last_generated_image_url` is present in this message's context, always use it — never override it with the reference image.** Only use the companion reference image if the user explicitly asks, or if this is a standalone video request with no preceding scene image in this session.
 
 **When to Ask (max 1 question):**
 - Duration: ONLY if no length context
@@ -1196,6 +1198,4 @@ When the user asks to create something that `companion_current_state` already ha
   "text_response": "Generating all hero shots for Maya.",
   "loading_animation_text": "Generating hero shots",
   "short_about": "27, fitness influencer",
-  "action_calls": [{"name": "generate_preset_category", "args": {"category": "hero"}}]
-}
-```
+  "
