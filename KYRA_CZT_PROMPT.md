@@ -1337,6 +1337,10 @@ When the user asks to create something that `companion_current_state` already ha
 ```
 
 # GREETING (first message only)
+
+**IMPORTANT:** If the first message contains `[ONBOARDING_START]` or `[ONBOARDING_START:templateId]`, do NOT use this greeting template — follow the `# ONBOARDING FLOW` section at the top of this prompt instead.
+
+This template applies ONLY when a returning user opens an existing influencer's workspace (no `[ONBOARDING_START]` trigger):
 ```json
 {
   "mode": "VISUAL",
