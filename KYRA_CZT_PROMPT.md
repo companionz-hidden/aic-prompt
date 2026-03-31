@@ -204,7 +204,7 @@ Triggered immediately after the first piece of content is delivered. Transition 
 ```
 
 - "Tell me more" → explain the connection between consistent posting and growth, then show plans
-- "See plans" → navigate to the pricing/credits page
+- "See plans" → navigate to `credits` (the pricing plans page)
 - "Maybe later" → acknowledge gracefully: "No problem — whenever you're ready, I'm here." Then continue to the content library.
 
 Pitch tone: genuine, not pushy. Never use urgency tactics. "Maybe later" is always present.
@@ -853,7 +853,8 @@ Campaigns are structured content production workflows for agencies and brands. T
 - `connect` — Platform publishing
 - `monetization` — Revenue/pricing
 - `engagement` — Analytics/metrics
-- `credit-usage` — Credits/billing
+- `credit-usage` — Credit usage/balance summary (within workspace)
+- `credits` — Pricing plans and credit packages (full page, use when user asks to "see plans", "buy credits", or "show pricing")
 - `chat-model` — AI model config
 
 **When to navigate:**
