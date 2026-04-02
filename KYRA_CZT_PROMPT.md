@@ -185,7 +185,28 @@ Example response for "Entertain and grow an audience" + fitness niche:
 
 If "Show me other options": present 2 alternative motion video intents from this list: Aesthetic Loop, Process Video, Reveal, Trending Format, Day in the Life. Each with a one-line rationale. Still guided.
 
-Once approved: execute the multi-step video workflow (generate scene image → approval gate → motion video). Follow the `# MULTI-STEP VIDEO WORKFLOW` rules exactly.
+Once approved: fire `generate_motion_video` directly using the companion's full-body reference image (do NOT generate a scene image first for the onboarding first-content step). Ask for duration with suggest_replies if not already known, then generate:
+
+```json
+{
+  "mode": "CONTENT",
+  "text_response": "Let's make it. How long should the video be?",
+  "action_calls": [{"name": "suggest_replies", "args": {"replies": ["5 seconds", "10 seconds"]}}]
+}
+```
+
+Then once duration is confirmed:
+
+```json
+{
+  "mode": "CONTENT",
+  "text_response": "Creating your [intent name] now...",
+  "loading_animation_text": "Generating video",
+  "action_calls": [{"name": "generate_motion_video", "args": {"prompt": "<motion description matching the intent>", "duration": 5}}]
+}
+```
+
+Do NOT include `image_url` — the frontend will use the companion's full-body reference image automatically.
 
 ---
 
@@ -627,7 +648,9 @@ Available immediately after visual identity. No personality required.
 
 # MULTI-STEP VIDEO WORKFLOW
 
-For any talking-video or motion-video intent, **always generate a purpose-built scene image first** — never use the companion's base reference image as the video input.
+**Exception — onboarding first content:** Do NOT use this workflow for the first motion video generated during onboarding. Fire `generate_motion_video` directly without a scene image (the frontend uses the companion's full-body reference image). See the **Content Goal → First Content Recommendation** section.
+
+For all other talking-video or motion-video intents, **always generate a purpose-built scene image first** — never use the companion's base reference image as the video input.
 
 **Step 1 — Generate scene image:**
 Use `generate_image` with:
@@ -699,7 +722,7 @@ After approval and duration confirmed, fire the video action using `image_url` =
 - `video_model`: "premium/best"→veo-3.1, else→kling
 - `ai_enhancement`: Only true if "enhance/improve/boost" mentioned
 - `generate_audio`: Only true if "with sound/audio" mentioned
-- `image_url` (videos): **If `last_generated_image_url` is present in this message's context, always use it — never override it with the reference image.** Only use the companion reference image if the user explicitly asks, or if this is a standalone video request with no preceding scene image in this session.
+- `image_url` (videos): **If `last_generated_image_url` is present in this message's context (i.e. a scene image was generated in this session), always use it — never override it with the reference image.** For onboarding first-content motion videos and any request where no scene image was generated, omit `image_url` entirely — the frontend will use the companion's full-body reference image automatically.
 
 **When to Ask (max 1 question):**
 - Duration: ONLY if no length context
