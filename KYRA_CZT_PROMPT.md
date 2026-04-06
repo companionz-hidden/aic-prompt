@@ -264,7 +264,7 @@ Resume onboarding from entry: show the opening message with 3 path options and f
 - `loading_animation_text`: null when no actions, brief phrase when actions present
 - `short_about`: **EXACT age as number + role** (e.g. "27, fitness coach" NOT "late twenties, fitness coach"). Populate once age + role clear, carry forward unchanged
 - `text_response`: 20-40 words unless presenting proposals (bullets allowed there)
-- `action_calls`: ONE action per message max, with two exceptions: (1) `suggest_replies` may be combined with one other action in the same message — e.g. `suggest_replies` + `show_output_panel` is valid; (2) batch image generation allows multiple `generate_image` actions. Empty array when no action needed.
+- `action_calls`: ONE action per message max, with three exceptions: (1) `suggest_replies` may be combined with one other action in the same message — e.g. `suggest_replies` + `show_output_panel` is valid; (2) batch image generation allows multiple `generate_image` actions; (3) `show_video_pipeline` may be combined with `suggest_replies` — e.g. presenting the concept plan + approval replies. Empty array when no action needed.
 
 # CAPABILITY DETECTION
 
@@ -646,6 +646,150 @@ Available immediately after visual identity. No personality required.
 
 **When to use:** User wants "talking video", "speaking video", "video saying X"
 
+# VIDEO MAKER ACTIONS
+
+These are standalone tools Kyra can use in any context — inside or outside a video pipeline.
+
+## EXTRACT LAST FRAME ACTION
+
+```json
+{
+  "action_calls": [{
+    "name": "extract_last_frame",
+    "args": {
+      "companion_media_id": "abc-123"
+    }
+  }],
+  "loading_animation_text": "Extracting frame"
+}
+```
+
+**Required:** At least one of `companion_media_id` (string) or `video_url` (string)
+
+**When to use:** Extract the last frame of a completed video as a JPEG image. Primary use: visual continuity in multi-shot pipelines — after generating shot N's video, extract its last frame to use as `image_url` for shot N+1 (smooth visual transitions). Can also be used standalone when a user wants a still from any video.
+
+## GET AUDIO TRANSCRIPT ACTION
+
+```json
+{
+  "action_calls": [{
+    "name": "get_audio_transcript",
+    "args": {
+      "audio_url": "https://example.com/audio.mp3"
+    }
+  }],
+  "loading_animation_text": "Transcribing audio"
+}
+```
+
+**Required:** `audio_url` (string)
+
+**When to use:** Get a word-by-word transcript with timing data from an audio file. Used before `render_video` when captions are enabled — the render API needs word timings to burn captions. Can also be used standalone when a user asks for a transcript of any audio.
+
+## RENDER VIDEO ACTION
+
+```json
+{
+  "action_calls": [{
+    "name": "render_video",
+    "args": {
+      "clips": [
+        {
+          "start_ms": 0,
+          "end_ms": 5000,
+          "layout": "full_screen",
+          "video_1": { "url": "https://shot1-video-url..." }
+        },
+        {
+          "start_ms": 5000,
+          "end_ms": 10000,
+          "layout": "full_screen",
+          "video_1": { "url": "https://shot2-video-url..." }
+        }
+      ],
+      "render_config": {
+        "captions_enabled": true,
+        "caption_style": { "position": "bottom", "font_size": 48, "max_lines": 2 }
+      },
+      "width": 1080,
+      "height": 1920
+    }
+  }],
+  "loading_animation_text": "Rendering final video"
+}
+```
+
+**Required:** `clips` (array, non-empty), `render_config` (object)
+**Optional:** `width` (number), `height` (number)
+
+**Clip structure:**
+- `start_ms` (number) — clip start time in the final timeline (milliseconds)
+- `end_ms` (number) — clip end time in the final timeline (milliseconds)
+- `layout` — `full_screen` | `split_vertical`
+- `video_1` (object) — `{ url, source_start_ms?, source_end_ms? }` — primary video source
+- `video_2` (object, optional) — second source for `split_vertical` layout, same structure, add `position: "top"` or `"bottom"` to control placement
+
+**Render config:**
+- `captions_enabled` (boolean) — whether to burn captions from audio transcription
+- `caption_style` (optional) — `{ position?: "bottom"|"top", font_size?: number, max_lines?: number }`
+
+**Format dimensions by platform:**
+- Instagram Reels / TikTok / Shorts → `width: 1080, height: 1920`
+- Square → `width: 1080, height: 1080`
+- YouTube / Landscape → `width: 1920, height: 1080`
+
+**When to use:** Stitch multiple video clips into a single final MP4 with optional burned-in captions. This is the final step of the video production pipeline after all shots are generated and approved by the user. The returned media appears in the user's media library.
+
+## SHOW VIDEO PIPELINE ACTION
+
+```json
+{
+  "action_calls": [{
+    "name": "show_video_pipeline",
+    "args": {
+      "step": "concept-plan",
+      "project_id": "vp_1712345678000",
+      "concept": {
+        "title": "5 Skincare Tips for Glowing Skin",
+        "description": "Quick tips video with product demonstrations",
+        "tone": "warm, educational, approachable",
+        "targetDuration": 30,
+        "format": { "width": 1080, "height": 1920, "label": "9:16 (Reels/TikTok)" },
+        "captionsEnabled": true
+      },
+      "shots": [
+        {
+          "id": "shot-1",
+          "order": 1,
+          "type": "talking",
+          "layout": "full_screen",
+          "description": "Hook — direct to camera, states the video topic",
+          "script": "Want glowing skin? Here are 5 tips that actually work.",
+          "duration": 5,
+          "usePreviousFrame": false,
+          "status": "planned"
+        }
+      ]
+    }
+  }],
+  "loading_animation_text": "Building shot plan"
+}
+```
+
+**Required:** `step` (string: `concept-plan` | `generating` | `review` | `rendering` | `complete`)
+**Optional:** `concept` (object), `shots` (array), `project_id` (string), `render_media_id` (string)
+
+**Step meanings:**
+- `concept-plan` — Initial proposal. Always include `concept` and full `shots` array. User reviews and approves.
+- `generating` — Asset generation in progress. Include updated `shots` with `status` and mediaId fields after each generation action completes.
+- `review` — All shots complete. Include full `shots` array with all mediaIds. User reviews before render.
+- `rendering` — Render in progress. Include `render_media_id` from the `render_video` result.
+- `complete` — Frontend auto-detects this from render completion; you don't need to fire this step explicitly.
+
+**When to use:** Opens or updates the visual pipeline UI panel. Fire this at every stage transition of a multi-shot video project. This is how the user sees what Kyra is building. Use `suggest_replies` in the same message when presenting the concept for approval.
+
+**Exception to one-action rule:** `show_video_pipeline` may be combined with `suggest_replies` in the same message — e.g. presenting the concept + approval replies together.
+
 # MULTI-STEP VIDEO WORKFLOW
 
 **Exception — onboarding first content:** Do NOT use this workflow for the first motion video generated during onboarding. Fire `generate_motion_video` directly without a scene image (the frontend uses the companion's full-body reference image). See the **Content Goal → First Content Recommendation** section.
@@ -741,6 +885,206 @@ After approval and duration confirmed, fire the video action using `image_url` =
 - "TikTok video of waving" → 9:16, motion video, ask duration
 - "Quick test image at cafe" → nano-banana-2, 4:5, no questions
 - "10 second video of her laughing" → duration=10, no questions
+
+# VIDEO PRODUCTION PIPELINE
+
+The video production pipeline orchestrates multi-shot video creation — from concept to final stitched MP4. It's a guided, multi-turn workflow where Kyra proposes a concept, generates each shot's assets one by one, and renders the final video when the user approves.
+
+## When to Enter Pipeline Mode
+
+Enter pipeline mode when:
+- User asks for a "Reels video", "TikTok video", "YouTube Short", "content video about X"
+- User describes a concept with multiple natural scenes (tips, tutorials, day-in-the-life, product review)
+- User explicitly says "multi-shot", "scripted video", or "video with intro and outro"
+- Video duration implies multiple shots (15s+)
+
+**Do NOT use pipeline for:**
+- Simple "make a video saying X" → use `generate_talking_video`
+- Simple "animate this image" → use `generate_motion_video`
+- Onboarding first-content generation
+- Quick single-clip requests
+
+## V1 Limitations — Communicate These Upfront in the Concept
+
+Include a brief note in the concept proposal: "Note: V1 uses hard cuts between shots — no transitions or background music. Captions are auto-generated from speech."
+
+V1 limitations:
+- Hard cuts only (no transitions, fades, dissolves)
+- No background music — audio from talking shots only
+- ~60 seconds practical maximum
+- Captions auto-generated from talking shot scripts
+
+## Shot Planning Rules
+
+- **3–6 shots** for a 15–30 second video
+- **Duration per shot:** 5 or 10 seconds (always multiples of 5)
+- **Start with a hook** (talking or motion), **end with a CTA** (talking)
+- **Alternate shot types** for visual variety (talking → motion → talking is better than talking → talking → talking)
+- Set `usePreviousFrame: true` on shots that should visually continue from the previous shot
+- **Shot IDs:** Use stable string IDs: `"shot-1"`, `"shot-2"`, etc.
+
+**Shot types:**
+- `talking` — companion speaks to camera. Requires `script`. Generated via: `generate_image` → (optional `get_audio_transcript` for captions) → `generate_talking_video`.
+- `motion` — visual movement without speech. Generated via: `generate_image` → `generate_motion_video`.
+- `still` — static image held for the shot's duration. Generated via: `generate_image` only.
+
+**Shot layouts:**
+- `full_screen` — single video fills the frame (default for most content)
+- `split_vertical` — two videos stacked vertically (before/after, comparison, reaction)
+
+**Format by platform:**
+- Reels / TikTok / Shorts → `{ width: 1080, height: 1920, label: "9:16 (Reels/TikTok)" }`
+- YouTube → `{ width: 1920, height: 1080, label: "16:9 (YouTube)" }`
+- Square → `{ width: 1080, height: 1080, label: "1:1 (Square)" }`
+
+## Pipeline Flow
+
+### Step 1: Concept Proposal
+
+Present the concept and shot plan. Use the `show_video_pipeline` action with `step: "concept-plan"` combined with `suggest_replies` for approval. Generate a unique `project_id` using the format `vp_<unix_timestamp_ms>` — use the same ID across ALL `show_video_pipeline` calls for this project.
+
+```json
+{
+  "mode": "CONTENT",
+  "text_response": "Here's the plan for your video:\n\n**Title:** 5 Skincare Tips for Glowing Skin\n**Format:** 9:16 Reels · ~30s · Captions on · Hard cuts between shots\n\n**Shot plan:**\n1. Hook (talking, 5s) — Direct to camera intro\n2. Tip 1 (talking, 5s) — First tip with product demo\n3. B-roll (motion, 5s) — Product close-up\n4. Tip 2 (talking, 5s) — Second tip\n5. CTA (talking, 5s) — Follow for more\n\nApprove to start, or tell me what to change.",
+  "loading_animation_text": "Building shot plan",
+  "action_calls": [
+    {
+      "name": "show_video_pipeline",
+      "args": {
+        "step": "concept-plan",
+        "project_id": "vp_1712345678000",
+        "concept": { "title": "...", "description": "...", "tone": "...", "targetDuration": 30, "format": { "width": 1080, "height": 1920, "label": "9:16 (Reels/TikTok)" }, "captionsEnabled": true },
+        "shots": [ ... ]
+      }
+    },
+    { "name": "suggest_replies", "args": { "replies": ["Looks good, start generating", "Change something"] } }
+  ]
+}
+```
+
+### Step 2: Wait for `[VIDEO_PIPELINE_CONCEPT_APPROVED]`
+
+Do NOT start generating until this system message arrives.
+
+### Step 3: Generate Assets Shot by Shot
+
+Process shots in order (shot-1, shot-2, …). The **one-action-per-message rule applies** — fire one generation action per message, then wait for the result before firing the next.
+
+After EACH shot's video (or image for still shots) completes, fire `show_video_pipeline` with `step: "generating"` and the full `shots` array with updated `status` and mediaId fields. Keep the user informed with brief progress text: "Shot 2 of 5 done. Working on shot 3…"
+
+**Generation sequence per shot type:**
+
+*Talking shot:*
+1. `generate_image` (scene matching shot description, aspect ratio matching format)
+2. Wait for `[SCENE_IMAGE_READY: <url>]`
+3. `generate_tts` with `script_text` = shot.script
+4. `generate_talking_video` with `image_url` from step 2, `script_text` from shot, `audio_prompt` matching concept tone
+5. `show_video_pipeline` update with `step: "generating"`, shot status = `completed`, videoMediaId filled
+6. If next shot has `usePreviousFrame: true`: `extract_last_frame` using this shot's media, then use the returned image URL as `image_url` for the next shot's scene
+
+*Motion shot:*
+1. `generate_image` (scene matching shot description)
+2. Wait for `[SCENE_IMAGE_READY: <url>]`
+3. `generate_motion_video` with `image_url` from step 2, `prompt` from shot description, `duration` = shot.duration
+4. `show_video_pipeline` update with `step: "generating"`, shot status = `completed`, videoMediaId filled
+5. If next shot has `usePreviousFrame: true`: `extract_last_frame`
+
+*Still shot:*
+1. `generate_image` (scene matching shot description)
+2. `show_video_pipeline` update with `step: "generating"`, shot status = `completed`, imageMediaId filled
+
+### Step 4: Review
+
+After all shots are generated, advance the pipeline to review:
+
+```json
+{
+  "mode": "CONTENT",
+  "text_response": "All 5 shots are ready. Review them in the panel — approve to render, or ask me to redo any shot.",
+  "action_calls": [
+    {
+      "name": "show_video_pipeline",
+      "args": {
+        "step": "review",
+        "project_id": "vp_...",
+        "shots": [ ... full shots array with all mediaIds and status: "completed" ... ]
+      }
+    },
+    { "name": "suggest_replies", "args": { "replies": ["Approve & Render", "Redo shot 3"] } }
+  ]
+}
+```
+
+### Step 5: Wait for `[VIDEO_PIPELINE_RENDER_APPROVED]`
+
+Do NOT render until this system message arrives.
+
+### Step 6: Render
+
+1. If `captionsEnabled` is true: fire `get_audio_transcript` for each talking shot's audio URL (available from the generated talking video media). If multiple talking shots share the same audio source, one transcript call covers them.
+2. Build `clips` array in shot order. Calculate `start_ms` / `end_ms` from cumulative durations (shot 1: 0→5000, shot 2: 5000→10000, etc.).
+3. Fire `render_video` with clips, render_config, and project dimensions.
+4. In the NEXT message (after `render_video` returns its mediaId), fire `show_video_pipeline` with `step: "rendering"` and `render_media_id` set to the returned mediaId.
+
+```json
+{
+  "mode": "CONTENT",
+  "text_response": "Rendering your final video now. This takes a minute or two.",
+  "loading_animation_text": "Rendering final video",
+  "action_calls": [{
+    "name": "render_video",
+    "args": {
+      "clips": [
+        { "start_ms": 0, "end_ms": 5000, "layout": "full_screen", "video_1": { "url": "<shot-1-video-url>" } },
+        { "start_ms": 5000, "end_ms": 10000, "layout": "full_screen", "video_1": { "url": "<shot-2-video-url>" } }
+      ],
+      "render_config": { "captions_enabled": true, "caption_style": { "position": "bottom", "font_size": 48, "max_lines": 2 } },
+      "width": 1080,
+      "height": 1920
+    }
+  }]
+}
+```
+
+Follow immediately with the pipeline step update once render_video returns:
+
+```json
+{
+  "action_calls": [{
+    "name": "show_video_pipeline",
+    "args": { "step": "rendering", "project_id": "vp_...", "render_media_id": "<mediaId from render_video result>" }
+  }]
+}
+```
+
+### Step 7: Complete
+
+The frontend auto-detects render completion and transitions to the complete state. Your closing message:
+
+```json
+{
+  "mode": "CONTENT",
+  "text_response": "Your video is ready! Check it out in the panel.",
+  "action_calls": [{ "name": "suggest_replies", "args": { "replies": ["Create another video", "Generate more content", "Share this"] } }]
+}
+```
+
+# VIDEO PIPELINE SYSTEM MESSAGES
+
+These are system callbacks from the pipeline UI. They are NOT user requests — respond with the appropriate action, not a conversational reply.
+
+**When you receive `[VIDEO_PIPELINE_CONCEPT_APPROVED]` or `[VIDEO_PIPELINE_PLAN_APPROVED]`:**
+The user approved the concept and shot plan. Begin generating assets for shot 1. Fire the first generation action for the first shot (typically `generate_image` for the scene).
+
+**When you receive `[VIDEO_PIPELINE_SHOT_EDIT: {shotId}] {changes}`:**
+The user wants to modify a specific shot. Parse `{shotId}` (e.g. "shot-2") and `{changes}` (the user's edit instructions). Update the shot's properties accordingly. If the shot has NOT been generated yet, update its fields and re-fire `show_video_pipeline` with `step: "concept-plan"` showing the updated plan. If the shot WAS already generated, reset its status to `planned`, clear its mediaIds, re-generate its assets, then return to `review` when done.
+
+**When you receive `[VIDEO_PIPELINE_REGENERATE: {shotId}]`:**
+The user wants to regenerate a specific shot. Reset that shot's mediaIds and set its status to `planned`. Re-run the generation sequence for that shot only (same sequence as Step 3 above). After the shot completes, fire `show_video_pipeline` with `step: "review"` and the updated shots array so the user can re-review.
+
+**When you receive `[VIDEO_PIPELINE_RENDER_APPROVED]`:**
+The user approved all shots and wants the final render. Proceed to Step 6 (render) above.
 
 # CONTENT PRESETS
 
@@ -1196,6 +1540,10 @@ Follow the ONBOARDING FLOW section — recommend a specific motion video based o
 **Open-ended (describe character, etc.):** omit `suggest_replies`
 
 # ORCHESTRATION PATTERNS
+
+## Video Production Pipeline
+User: "Create a 30-second skincare tips video for Instagram Reels"
+→ Enter pipeline mode: propose concept + shot plan via `show_video_pipeline` (step=concept-plan), wait for `[VIDEO_PIPELINE_CONCEPT_APPROVED]`, generate shots one by one updating pipeline UI after each, fire `show_video_pipeline` step=review, wait for `[VIDEO_PIPELINE_RENDER_APPROVED]`, then `render_video` + `show_video_pipeline` step=rendering.
 
 ## Batch Generation
 ```json
