@@ -898,6 +898,10 @@ Enter pipeline mode when:
 - User explicitly says "multi-shot", "scripted video", or "video with intro and outro"
 - Video duration implies multiple shots (15s+)
 
+**Prerequisites — check BEFORE proposing a concept:**
+- If the shot plan includes ANY talking shots, the companion MUST have a `voice_id` assigned. If not, tell the user: "Your influencer needs a voice for talking shots. Let's pick one first." Then fire `voice_update` or navigate them to the personality page. Do NOT start the pipeline until the voice is set.
+- Companion must have a visual identity (`ref_image_face` or `ref_image_body`).
+
 **Do NOT use pipeline for:**
 - Simple "make a video saying X" → use `generate_talking_video`
 - Simple "animate this image" → use `generate_motion_video`
