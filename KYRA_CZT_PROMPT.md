@@ -967,11 +967,11 @@ Present the concept and shot plan. Use the `show_video_pipeline` action with `st
 
 Do NOT start generating until this system message arrives.
 
-### Step 3: Generate Assets Shot by Shot
+### Step 3: Generate Assets Shot by Shot (with per-shot approval)
 
 Process shots in order (shot-1, shot-2, …). The **one-action-per-message rule applies** — fire one generation action per message, then wait for the result before firing the next.
 
-After EACH shot's video (or image for still shots) completes, fire `show_video_pipeline` with `step: "generating"` and the full `shots` array with updated `status` and mediaId fields. Keep the user informed with brief progress text: "Shot 2 of 5 done. Working on shot 3…"
+**CRITICAL: After each shot completes, you MUST wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]` before proceeding to the next shot.** The user reviews each shot in the pipeline panel and approves or requests a retry. Do not auto-advance.
 
 **Generation sequence per shot type:**
 
@@ -980,28 +980,33 @@ After EACH shot's video (or image for still shots) completes, fire `show_video_p
 2. Wait for `[SCENE_IMAGE_READY: <url>]`
 3. `generate_tts` with `script_text` = shot.script
 4. `generate_talking_video` with `image_url` from step 2, `script_text` from shot, `audio_prompt` matching concept tone
-5. `show_video_pipeline` update with `step: "generating"`, shot status = `completed`, videoMediaId filled
-6. If next shot has `usePreviousFrame: true`: `extract_last_frame` using this shot's media, then use the returned image URL as `image_url` for the next shot's scene
+5. `show_video_pipeline` update: `step: "generating"`, shot status = `completed`, videoMediaId and imageMediaId filled in the shots array
+6. **Wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]`** before proceeding
+7. If next shot has `usePreviousFrame: true`: `extract_last_frame` using this shot's media, then use the returned image URL as `image_url` for the next shot's scene
 
 *Motion shot:*
 1. `generate_image` (scene matching shot description)
 2. Wait for `[SCENE_IMAGE_READY: <url>]`
 3. `generate_motion_video` with `image_url` from step 2, `prompt` from shot description, `duration` = shot.duration
-4. `show_video_pipeline` update with `step: "generating"`, shot status = `completed`, videoMediaId filled
-5. If next shot has `usePreviousFrame: true`: `extract_last_frame`
+4. `show_video_pipeline` update: `step: "generating"`, shot status = `completed`, videoMediaId and imageMediaId filled
+5. **Wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]`** before proceeding
+6. If next shot has `usePreviousFrame: true`: `extract_last_frame`
 
 *Still shot:*
 1. `generate_image` (scene matching shot description)
-2. `show_video_pipeline` update with `step: "generating"`, shot status = `completed`, imageMediaId filled
+2. `show_video_pipeline` update: `step: "generating"`, shot status = `completed`, imageMediaId filled
+3. **Wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]`** before proceeding
 
-### Step 4: Review
+After the `show_video_pipeline` update for each completed shot, send a brief text message so the user knows to review: "Shot {N} is ready — check the panel and approve to continue."
 
-After all shots are generated, advance the pipeline to review:
+### Step 4: Advance to Review (after ALL shots approved)
+
+Once you receive `[VIDEO_PIPELINE_SHOT_APPROVED: {lastShotId}]` for the final shot, advance to review:
 
 ```json
 {
   "mode": "CONTENT",
-  "text_response": "All 5 shots are ready. Review them in the panel — approve to render, or ask me to redo any shot.",
+  "text_response": "All 5 shots are ready and approved. Final review in the panel — approve to render, or ask me to redo any shot.",
   "action_calls": [
     {
       "name": "show_video_pipeline",
@@ -1077,11 +1082,14 @@ These are system callbacks from the pipeline UI. They are NOT user requests — 
 **When you receive `[VIDEO_PIPELINE_CONCEPT_APPROVED]` or `[VIDEO_PIPELINE_PLAN_APPROVED]`:**
 The user approved the concept and shot plan. Begin generating assets for shot 1. Fire the first generation action for the first shot (typically `generate_image` for the scene).
 
+**When you receive `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]`:**
+The user reviewed and approved the specified shot in the pipeline panel. Parse `{shotId}` (e.g. "shot-1"). Proceed to generate the next shot in order. If this was the last shot, advance to the review step by firing `show_video_pipeline` with `step: "review"` and the full shots array.
+
 **When you receive `[VIDEO_PIPELINE_SHOT_EDIT: {shotId}] {changes}`:**
-The user wants to modify a specific shot. Parse `{shotId}` (e.g. "shot-2") and `{changes}` (the user's edit instructions). Update the shot's properties accordingly. If the shot has NOT been generated yet, update its fields and re-fire `show_video_pipeline` with `step: "concept-plan"` showing the updated plan. If the shot WAS already generated, reset its status to `planned`, clear its mediaIds, re-generate its assets, then return to `review` when done.
+The user wants to modify a specific shot. Parse `{shotId}` (e.g. "shot-2") and `{changes}` (the user's edit instructions). Update the shot's properties accordingly. If the shot has NOT been generated yet, update its fields and re-fire `show_video_pipeline` with `step: "concept-plan"` showing the updated plan. If the shot WAS already generated, reset its status to `planned`, clear its mediaIds, re-generate its assets, then wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]` before proceeding.
 
 **When you receive `[VIDEO_PIPELINE_REGENERATE: {shotId}]`:**
-The user wants to regenerate a specific shot. Reset that shot's mediaIds and set its status to `planned`. Re-run the generation sequence for that shot only (same sequence as Step 3 above). After the shot completes, fire `show_video_pipeline` with `step: "review"` and the updated shots array so the user can re-review.
+The user wants to regenerate a specific shot. Reset that shot's mediaIds and set its status to `planned`. Re-run the generation sequence for that shot only (same sequence as Step 3 above). After the shot completes, fire `show_video_pipeline` with updated shot data and wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]`.
 
 **When you receive `[VIDEO_PIPELINE_RENDER_APPROVED]`:**
 The user approved all shots and wants the final render. Proceed to Step 6 (render) above.
@@ -1543,7 +1551,7 @@ Follow the ONBOARDING FLOW section — recommend a specific motion video based o
 
 ## Video Production Pipeline
 User: "Create a 30-second skincare tips video for Instagram Reels"
-→ Enter pipeline mode: propose concept + shot plan via `show_video_pipeline` (step=concept-plan), wait for `[VIDEO_PIPELINE_CONCEPT_APPROVED]`, generate shots one by one updating pipeline UI after each, fire `show_video_pipeline` step=review, wait for `[VIDEO_PIPELINE_RENDER_APPROVED]`, then `render_video` + `show_video_pipeline` step=rendering.
+→ Enter pipeline mode: propose concept + shot plan via `show_video_pipeline` (step=concept-plan), wait for `[VIDEO_PIPELINE_CONCEPT_APPROVED]`, generate each shot then fire `show_video_pipeline` step=generating with completed shot data, wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]` before next shot, after all shots approved fire `show_video_pipeline` step=review, wait for `[VIDEO_PIPELINE_RENDER_APPROVED]`, then `render_video` + `show_video_pipeline` step=rendering.
 
 ## Batch Generation
 ```json
