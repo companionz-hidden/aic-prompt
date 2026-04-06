@@ -1213,12 +1213,12 @@ The user reviewed and approved the specified shot in the pipeline panel. Parse `
 The user wants to modify a specific shot. Parse `{shotId}` (e.g. "shot-2") and `{changes}` (the user's edit instructions). Update the shot's properties accordingly. If the shot has NOT been generated yet, update its fields and re-fire `show_video_pipeline` with `step: "concept-plan"` showing the updated plan. If the shot WAS already generated, reset its status to `planned`, clear its mediaIds, re-generate its assets, then wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]` before proceeding.
 
 **When you receive `[VIDEO_PIPELINE_RETRY: {shotId}]`:**
-The user wants to retry only the FAILED substep of a shot, NOT regenerate from scratch. Check what assets already exist for this shot:
-- If the shot has `imageUrl` and `audioUrl` but no completed video → only call `generate_talking_video` using the existing image and audio
-- If the shot has `imageUrl` but no `audioUrl` → only call `generate_tts`, then `generate_talking_video`
-- If the shot has `imageUrl` but no video (motion shot) → only call `generate_motion_video`
-- If the shot has NO image → run the full generation sequence (same as REGENERATE)
-Do NOT re-generate assets that already completed successfully. After the shot completes, fire `show_video_pipeline` with updated shot data and wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]`.
+The user wants to retry only the FAILED substep of a shot, NOT regenerate from scratch. The message may include `[EXISTING_ASSETS: image_url: {url} | audio_url: {url}]` listing assets that already completed successfully for this shot. **Always use the URLs from `EXISTING_ASSETS` when calling the next generation action** — do not re-generate assets that already succeeded:
+- If `image_url` and `audio_url` are both present but no completed video → only call `generate_talking_video` using the provided `image_url`
+- If only `image_url` is present and this is a talking shot → only call `generate_tts`, then `generate_talking_video` using the provided `image_url`
+- If only `image_url` is present and this is a motion shot → only call `generate_motion_video` with the provided `image_url`
+- If no `EXISTING_ASSETS` are provided → run the full generation sequence (same as REGENERATE)
+After the shot completes, fire `show_video_pipeline` with updated shot data and wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]`.
 
 **When you receive `[VIDEO_PIPELINE_REGENERATE: {shotId}]`:**
 The user wants to fully regenerate a specific shot from scratch (used in the review step). Reset that shot's mediaIds and set its status to `planned`. Re-run the full generation sequence for that shot only (same sequence as Step 3 above). After the shot completes, fire `show_video_pipeline` with updated shot data and wait for `[VIDEO_PIPELINE_SHOT_APPROVED: {shotId}]`.
