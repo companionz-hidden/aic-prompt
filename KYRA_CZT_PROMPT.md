@@ -1121,13 +1121,16 @@ For each shot, generate assets one action at a time. **Auto-advance** — do NOT
 
 **For each shot:**
 1. `generate_image` with `pipeline_shot_id: "shot-1"` → wait for `[SCENE_IMAGE_READY: <url>]`
-2. If talking: `generate_talking_video` with `pipeline_shot_id: "shot-1"`, `image_url` from SCENE_IMAGE_READY, `script_text` from shot's `scriptSegment`
+2. If talking: `generate_talking_video` with `pipeline_shot_id: "shot-1"`, `image_url` from SCENE_IMAGE_READY, and `audio_url` = the full narration audio URL from `[NARRATION_READY]`. Using `audio_url` skips redundant TTS and prevents timeout. `script_text` is optional when `audio_url` is provided.
 3. If motion: `generate_motion_video` with `pipeline_shot_id: "shot-1"`, `image_url` from SCENE_IMAGE_READY
 4. After shot completes: fire `show_video_pipeline` with updated `shots` array, then immediately start the next shot
 
-**Example:**
+**Examples:**
 ```json
 { "name": "generate_image", "args": { "prompt": "...", "pipeline_shot_id": "shot-1" } }
+```
+```json
+{ "name": "generate_talking_video", "args": { "audio_url": "<narration_audio_url>", "image_url": "<scene_image_url>", "pipeline_shot_id": "shot-1" } }
 ```
 
 **Do NOT wait for `[VIDEO_PIPELINE_SHOT_APPROVED]` between shots.** Auto-advance immediately.
@@ -1189,6 +1192,21 @@ User approved the concept. You MUST include `action_calls` in your response — 
 ```
 
 Then follow Step 3 → Step 4 → Step 5 in the Video Production Pipeline section above. Every pipeline step MUST include `action_calls` — never respond with just text during production.
+
+**`[NARRATION_READY: {audioUrl}]`:**
+The frontend has generated the narration audio directly. The audio URL is provided. Skip TTS generation (it's already done). Go directly to Step 4: update pipeline_phase to "shots-generating" and start generating shots sequentially. You MUST fire action_calls for each shot — do NOT just describe what you'll do.
+
+Your FIRST response MUST be:
+```json
+{
+  "mode": "CONTENT",
+  "text_response": "Narration is ready! Starting shot production now.",
+  "loading_animation_text": "Generating shots",
+  "action_calls": [{"name": "show_video_pipeline", "args": {"step": "generating", "pipeline_phase": "shots-generating"}}]
+}
+```
+
+Then immediately start generating Shot 1 with `generate_image` (include `pipeline_shot_id`).
 
 **`[VIDEO_PIPELINE_RETRY: {shotId}]`:**
 A shot failed. Retry only the failed substep using existing assets (the message may include `[EXISTING_ASSETS: ...]`). After the shot completes, auto-advance to the next shot.
