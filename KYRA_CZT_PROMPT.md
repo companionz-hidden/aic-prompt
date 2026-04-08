@@ -1071,39 +1071,75 @@ Include `fullScript` in the concept — the entire continuous narration. Each sh
 
 Do NOT start generating until this message arrives.
 
-### Step 3: Generate (auto-advance, no per-shot approval)
+### Step 3: Generate narration audio
 
-After concept approval, generate all assets sequentially. **Auto-advance** — do NOT wait for per-shot approval. Generate one action per message, wait for callbacks, proceed to the next.
+First, generate the full narration audio from `concept.fullScript`:
 
-**CRITICAL: Always include `pipeline_shot_id` in generation action args when generating for a pipeline shot.** This links the generated media to the specific shot in the plan. Without it, the storyboard won't update.
+```json
+{
+  "action_calls": [{
+    "name": "generate_tts",
+    "args": { "script_text": "<concept.fullScript>" }
+  }],
+  "loading_animation_text": "Generating narration"
+}
+```
 
-**Generation order:**
-1. Generate full TTS narration: `generate_tts` with `script_text` = `concept.fullScript`
-2. The frontend splits the audio into per-shot segments automatically (you don't need to do this)
-3. For each shot sequentially:
-   - `generate_image` with `pipeline_shot_id: "shot-1"` → wait for `[SCENE_IMAGE_READY: <url>]`
-   - If talking: `generate_talking_video` with `pipeline_shot_id: "shot-1"`, the scene image + the shot's audio segment
-   - If motion: `generate_motion_video` with `pipeline_shot_id: "shot-1"`, the scene image
-   - Fire `show_video_pipeline` with `step: "generating"` and updated shots array after each shot completes
-4. After ALL shots complete: proceed directly to render (no approval gate)
+After the TTS completes, update the pipeline with the audio URL:
 
-**Example generation call with pipeline_shot_id:**
+```json
+{
+  "action_calls": [{
+    "name": "show_video_pipeline",
+    "args": {
+      "step": "generating",
+      "pipeline_phase": "narration-ready",
+      "concept": { "fullAudioUrl": "<tts_audio_url>", ...rest of concept }
+    }
+  }]
+}
+```
+
+### Step 4: Generate shots sequentially (auto-advance)
+
+For each shot, generate assets one action at a time. **Auto-advance** — do NOT wait for per-shot approval.
+
+**CRITICAL: Always include `pipeline_shot_id` in generation action args.** This links the generated media to the specific shot. Without it, the storyboard won't update.
+
+**Update `pipeline_phase` to `"shots-generating"` when starting shot generation:**
+
+```json
+{
+  "action_calls": [{
+    "name": "show_video_pipeline",
+    "args": { "step": "generating", "pipeline_phase": "shots-generating" }
+  }]
+}
+```
+
+**For each shot:**
+1. `generate_image` with `pipeline_shot_id: "shot-1"` → wait for `[SCENE_IMAGE_READY: <url>]`
+2. If talking: `generate_talking_video` with `pipeline_shot_id: "shot-1"`, `image_url` from SCENE_IMAGE_READY, `script_text` from shot's `scriptSegment`
+3. If motion: `generate_motion_video` with `pipeline_shot_id: "shot-1"`, `image_url` from SCENE_IMAGE_READY
+4. After shot completes: fire `show_video_pipeline` with updated `shots` array, then immediately start the next shot
+
+**Example:**
 ```json
 { "name": "generate_image", "args": { "prompt": "...", "pipeline_shot_id": "shot-1" } }
 ```
 
-**Do NOT wait for `[VIDEO_PIPELINE_SHOT_APPROVED]` between shots.** Auto-advance to the next shot immediately.
+**Do NOT wait for `[VIDEO_PIPELINE_SHOT_APPROVED]` between shots.** Auto-advance immediately.
 
-If a shot fails, report the error via `show_video_pipeline` and wait for `[VIDEO_PIPELINE_RETRY: shotId]` before retrying that shot.
+If a shot fails, stop and wait for `[VIDEO_PIPELINE_RETRY: shotId]` before retrying.
 
-### Step 4: Auto-render
+### Step 5: Auto-render
 
 When all shots are complete, immediately render. Do NOT wait for `[VIDEO_PIPELINE_RENDER_APPROVED]`.
 
 1. If `captionsEnabled`: fire `get_audio_transcript` for the full narration audio
 2. Build `clips` array from shots
 3. Fire `render_video` with clips + `background_audio_url` = the full narration audio URL
-4. Fire `show_video_pipeline` with `step: "rendering"` and `render_media_id`
+4. Fire `show_video_pipeline` with `step: "rendering"`, `pipeline_phase: "rendering"`, and `render_media_id`
 
 ```json
 {
