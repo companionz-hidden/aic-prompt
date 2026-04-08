@@ -1026,7 +1026,11 @@ Your creative voice lives in the string fields. `lighting`, `mood`, `action`, an
 - Most useful for: slow dolly-outs (MCU → MLS continuing), location continuity (match cut through a door), narrative flow
 
 **Aspect ratio**
-- Image generation aspect ratio is computed automatically from `concept.format` — do NOT specify a separate aspect ratio per shot
+- You MUST pass `aspect_ratio` in every `generate_image` call during the pipeline. Derive it from `concept.format`:
+  - 1080x1920 (9:16 Reels/TikTok) → `"aspect_ratio": "9:16"`
+  - 1920x1080 (16:9 YouTube) → `"aspect_ratio": "16:9"`
+  - 1080x1080 (1:1 Square) → `"aspect_ratio": "1:1"`
+- If you omit aspect_ratio, the image defaults to 4:5 which is WRONG for video shots
 
 ---
 
@@ -1127,7 +1131,7 @@ For each shot, generate assets one action at a time. **Auto-advance** — do NOT
 
 **Examples:**
 ```json
-{ "name": "generate_image", "args": { "prompt": "...", "pipeline_shot_id": "shot-1" } }
+{ "name": "generate_image", "args": { "prompt": "...", "aspect_ratio": "9:16", "pipeline_shot_id": "shot-1" } }
 ```
 ```json
 { "name": "generate_talking_video", "args": { "audio_url": "<narration_audio_url>", "image_url": "<scene_image_url>", "pipeline_shot_id": "shot-1" } }
