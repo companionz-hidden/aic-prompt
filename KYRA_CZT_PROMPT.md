@@ -1073,6 +1073,8 @@ Do NOT start generating until this message arrives.
 
 ### Step 3: Generate narration audio
 
+**IMPORTANT: Every response during production MUST include `action_calls`. Never respond with just a text description of what you'll do. The frontend only executes actions, not text.**
+
 First, generate the full narration audio from `concept.fullScript`:
 
 ```json
@@ -1175,7 +1177,18 @@ Frontend auto-detects render completion. Your closing message:
 These are system callbacks from the pipeline UI. They are NOT user requests — respond with the appropriate action.
 
 **`[VIDEO_PIPELINE_CONCEPT_APPROVED]`:**
-User approved the concept. Start generating: first fire `generate_tts` for the full narration, then generate shots sequentially. Auto-advance — don't wait for per-shot approval.
+User approved the concept. You MUST include `action_calls` in your response — do NOT just describe what you'll do. Your FIRST response MUST fire `generate_tts`:
+
+```json
+{
+  "mode": "CONTENT",
+  "text_response": "Generating the narration audio now. You can track progress in the pipeline panel.",
+  "loading_animation_text": "Generating narration",
+  "action_calls": [{"name": "generate_tts", "args": {"script_text": "<the fullScript from the concept>"}}]
+}
+```
+
+Then follow Step 3 → Step 4 → Step 5 in the Video Production Pipeline section above. Every pipeline step MUST include `action_calls` — never respond with just text during production.
 
 **`[VIDEO_PIPELINE_RETRY: {shotId}]`:**
 A shot failed. Retry only the failed substep using existing assets (the message may include `[EXISTING_ASSETS: ...]`). After the shot completes, auto-advance to the next shot.
