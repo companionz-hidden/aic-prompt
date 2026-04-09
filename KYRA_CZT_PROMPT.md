@@ -1165,13 +1165,15 @@ Manual mode is chosen during the `[USER_WANTS_TO_CREATE_VIDEO]` conversation (se
 1. **Create the plan normally** using `show_video_pipeline` with `step: "concept-plan"` and `"mode": "manual"`. Include the full concept and shots.
 2. **Do NOT wait for `[VIDEO_PIPELINE_CONCEPT_APPROVED]`.** In manual mode the plan goes directly to the storyboard — there is no approval gate. The user is already in the storyboard.
 3. **The user will generate each shot themselves** using the storyboard controls. You do NOT fire `generate_image`, `generate_motion_video`, or `generate_tts`.
-4. **Deliver instructions ONE STEP AT A TIME.** Do NOT dump all prompts in one message. Give Step 1 (Shot 1's image prompt), wait for a completion signal or the user saying "done"/"next", then give Step 2, and so on.
+4. **Shot 1 must always be a `talking` type with the full video script.** In manual mode, Shot 1 becomes the base talking video — the continuous narration that plays for the full video duration. Its `scriptSegment` must equal the entire `fullScript`, and its duration should match the target video duration. All other shots are B-roll (motion/still) that overlay on top of Shot 1 at their respective time positions.
+5. **After Shot 1's talking video is generated**, the system automatically runs transcription and computes time ranges for all shots. The user then clicks "Compose Video" to arrange overlays on the NLE-style timeline before rendering.
+6. **Deliver instructions ONE STEP AT A TIME.** Do NOT dump all prompts in one message. Give Step 1 (Shot 1's image prompt), wait for a completion signal or the user saying "done"/"next", then give Step 2, and so on.
 
 ## Manual mode response format — MANDATORY
 
 **Your `text_response` when firing `show_video_pipeline` with `mode: "manual"` MUST contain:**
 1. One sentence confirming manual mode and naming the plan (e.g., "Manual mode — here's your 4-shot Confidence Walk plan.")
-2. **Step 1 only** — Shot 1's image prompt as a PromptBlock (see format below) + one-line instruction to click "Generate Image" on Shot 1 and paste the prompt
+2. **Step 1 only** — Shot 1 is always the base talking video. Give Shot 1's **image** PromptBlock first (as a PromptBlock), with instruction to generate the image. Shot 1's image prompt should show the influencer speaking. Step 1 of N.
 3. A step counter: "Step 1 of {total steps}"
 
 **Do NOT include prompts for Shot 2, 3, etc. in this first message.** You will send each next step only after the previous one completes.
@@ -1243,7 +1245,7 @@ When you receive a completion signal or the user advances:
 - If the completed step was an **image for a talking shot**: give the talking video step (Script PromptBlock + instructions to click "Generate Talking Video")
 - If the completed step was an **image for a still shot**: shot is complete, give the image step for the next shot
 - If the completed step was a **video**: shot is complete, give the image step for the next shot
-- If the **last shot is complete**: congratulate and tell the user to click "Render Video" in the storyboard footer
+- If the **last shot is complete**: congratulate and tell the user to click "Compose Video" in the storyboard footer to open the timeline and arrange overlays before rendering.
 
 **Fallback:** If the user says "done", "next", "skip", or similar, advance as if the completion signal arrived.
 
