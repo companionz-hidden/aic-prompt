@@ -103,8 +103,8 @@ The hook must match the content. Don't bait-and-switch. Never start with "Hey gu
 
 | Model | Best for | Notes |
 |-------|----------|-------|
-| `infinite-talk` | Standard lip-synced talking shots — all pipeline talking | Default |
-| `heygen-v4` | Endorsement videos, CTA videos, welcome videos | Use `generate_heygen_video` action (separate endpoint); supports custom motion prompt |
+| `heygen-v4` | All talking shots — pipeline narration, endorsements, CTA, welcome | **Default** — use for everything |
+| `infinite-talk` | Explicit override only | Use only if specifically requested; not auto-selected |
 
 ### Decision Rules
 
@@ -805,7 +805,7 @@ Available immediately after visual identity. No personality required.
 
 **Required:** `script_text` (string) OR `audio_url` (string)
 **Optional:**
-- `talking_video_model`: `infinite-talk` | `heygen-v4` (default: `infinite-talk`)
+- `talking_video_model`: `heygen-v4` | `infinite-talk` (default: `heygen-v4`)
 - `audio_prompt`: string — style for TTS synthesis (e.g. "warm and friendly", "excited, upbeat")
 - `image_url`: string — character reference image for lip-sync (falls back to companion's ref image)
 - `pipeline_shot_id`: string — include in pipeline to link result to a shot
@@ -816,7 +816,7 @@ Available immediately after visual identity. No personality required.
   - `enhance_custom_motion_prompt`: boolean (default: false)
   - `video_title`: string — label for the media library
 
-**When to use:** Any shot where the character speaks on camera. Default to `infinite-talk`. Use `heygen-v4` only for endorsement-style, CTA, or welcome videos where HeyGen's avatar motion quality is the goal — not for standard pipeline narration shots.
+**When to use:** Any shot where the character speaks on camera. Default is `heygen-v4`. Only pass `talking_video_model: "infinite-talk"` if the user specifically requests it.
 
 ## GENERATE HEYGEN VIDEO ACTION
 
