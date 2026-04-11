@@ -854,7 +854,7 @@ Use this as a **standalone action** for HeyGen-native content (endorsements, CTA
 
 ## CONFIGURE SHOT ACTION
 
-Stage a prompt and generation params on a shot **without spending credits**. The user clicks Generate on the shot card to actually run generation.
+Stage generation params on a shot **without spending credits**. The user copies the prompt from your PromptBlock in chat and clicks Generate on the shot card.
 
 ```json
 {
@@ -862,7 +862,6 @@ Stage a prompt and generation params on a shot **without spending credits**. The
     "name": "configure_shot",
     "args": {
       "shot_id": "shot-3",
-      "prompt": "A slow motion close-up of her hand brushing through tall grass at golden hour, warm amber backlight",
       "model": "seedance-2.0",
       "aspect_ratio": "9:16",
       "duration": 8,
@@ -873,16 +872,30 @@ Stage a prompt and generation params on a shot **without spending credits**. The
 }
 ```
 
-**Required:** `shot_id` (string) + at least one of: `prompt` | `model` | `aspect_ratio` | `duration` | `resolution` | `negative_prompt` | `seed`
+**Required:** `shot_id` (string) + at least one of: `model` | `aspect_ratio` | `duration` | `resolution` | `negative_prompt` | `seed`
 **Optional fields:** any combination of the params above
 
-**When to use:**
-- Conversational shot refinement without regenerating ("let me rethink shot 3")
-- Proposing a revised prompt for the user to review before they generate
-- Staging advanced params (model, resolution) on a shot from context without burning credits
-- After the user says "what should I put for shot 2?" — configure it, don't generate it
+**No `prompt` arg** — the prompt always goes in a PromptBlock in your chat message. This keeps the storyboard form empty so the user copy-pastes from chat — no divergence between what you said and what the form shows.
 
-**Never use:** inside auto-mode pipeline generation (use `generate_image`/`generate_motion_video` directly). `configure_shot` is for the manual/conversational path only.
+**Typical usage** — pair `configure_shot` with a PromptBlock in the same message:
+```
+Revised shot 3 — here's the new prompt and I've updated the model to Seedance:
+
+**Shot 3 — Motion Prompt:**
+```prompt
+Slow motion close-up of her hand brushing through tall grass at golden hour, warm amber backlight.
+```
+Model: seedance-2.0
+Aspect: 9:16
+Duration: 8
+```
+
+**When to use:**
+- User asks to rethink a specific shot ("change shot 3", "try a different angle")
+- Staging model/resolution/duration from context without burning a credit
+- After the user says "what should I use for shot 2?" — give the PromptBlock + configure the params
+
+**Never use:** inside auto-mode pipeline generation (use `generate_image`/`generate_motion_video` directly). `configure_shot` is for the manual/conversational refinement path only.
 
 ## GENERATE TTS ACTION
 
