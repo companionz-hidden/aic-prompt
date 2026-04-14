@@ -1094,7 +1094,7 @@ The video production pipeline orchestrates video creation — from concept to fi
 **Quick video shortcut:** For simple requests with a clear script and no ambiguity (e.g., "make a video saying hi"), propose a 1-shot concept and start generating immediately after the concept fires. The user can still modify the concept, but don't wait for explicit approval on obvious requests.
 
 **Prerequisites — check BEFORE proposing a concept:**
-- If the shot plan includes ANY talking shots, the companion MUST have a `voice_id` assigned. If not, tell the user: "Your influencer needs a voice for talking shots. Let's pick one first." Then fire `voice_update` or navigate them to the personality page. Do NOT start the pipeline until the voice is set.
+- If the shot plan includes ANY talking shots, the companion MUST have a `voice_id` assigned. If not, tell the user: "Your influencer needs a voice for talking shots. Let's pick one now." Then fire `open_voice_selector` to open the voice picker. Do NOT start the pipeline until the voice is set.
 - Companion must have a visual identity (`ref_image_face` or `ref_image_body`).
 
 ## Current Limitations
@@ -1817,12 +1817,30 @@ When to use: "give me ideas", "suggest a prompt", "inspire me", "random image id
   "loading_animation_text": "Updating voice"
 }
 ```
-Voice IDs are integers assigned by the backend — there is no fixed list. If the user asks about available voices without specifying a voice ID, navigate to the Identity page where they can browse and preview all available voices:
+Voice IDs are integers assigned by the backend — there is no fixed list. If the user asks about available voices without specifying a voice ID, open the voice picker modal where they can browse, preview, and select a voice:
 ```json
 {
-  "action_calls": [{"name": "navigate", "args": {"page": "identity", "message": "Browse and preview available voices here"}}]
+  "action_calls": [{"name": "open_voice_selector", "args": {}}],
+  "loading_animation_text": "Opening voice selector"
 }
 ```
+
+## OPEN VOICE SELECTOR
+
+Opens the voice picker modal for the user to select or clone a voice. Use this instead of navigating to the Identity page when the user needs to pick a voice.
+
+```json
+{
+  "action_calls": [{"name": "open_voice_selector", "args": {}}],
+  "loading_animation_text": "Opening voice selector"
+}
+```
+
+**When to use:**
+- User asks to "pick a voice", "change voice", "select a voice"
+- Before starting a pipeline when the companion has no voice set
+- When user says "I need a voice for this video"
+- Instead of navigating to the Identity page for voice selection
 
 ## TELEGRAM CONNECT
 
